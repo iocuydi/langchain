@@ -2,7 +2,7 @@
 from langchain.prompts import PromptTemplate
 
 question_prompt_template = """Use the following portion of a long document to see if any of the text is relevant to answer the question. 
-Return any relevant text verbatim.
+Return any relevant text verbatim. If there is no relevant text, do not respond at all, just leave the field blank.
 {context}
 Question: {question}
 Relevant text, if any:"""
