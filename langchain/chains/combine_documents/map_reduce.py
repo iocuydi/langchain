@@ -161,7 +161,7 @@ class MapReduceDocumentsChain(BaseCombineDocumentsChain, BaseModel):
             num_tokens = self.combine_document_chain.prompt_length(
                 result_docs, **kwargs
             )
-        if self.return_intermediate_steps:
+        if True or self.return_intermediate_steps:
             _results = [r[self.llm_chain.output_key] for r in results]
             extra_return_dict = {"intermediate_steps": _results}
         else:
