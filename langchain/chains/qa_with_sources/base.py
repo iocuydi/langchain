@@ -98,12 +98,12 @@ class BaseQAWithSourcesChain(Chain, BaseModel, ABC):
         if len(docs) == 0:
             return {self.answer_key: "I don\'t know.", self.sources_answer_key: ""}
         
-        answer, _ = self.combine_document_chain.combine_docs(docs, **inputs)
+        answer, intermediate = self.combine_document_chain.combine_docs(docs, **inputs)
         if "SOURCES: " in answer:
             answer, sources = answer.split("SOURCES: ")
         else:
             sources = ""
-        return {self.answer_key: answer, self.sources_answer_key: sources}
+        return {self.answer_key: answer, self.sources_answer_key: {'actual_sources': sources, 'intermediate': intermediate}}
 
 
 class QAWithSourcesChain(BaseQAWithSourcesChain, BaseModel):
