@@ -136,6 +136,7 @@ class MapReduceDocumentsChain(BaseCombineDocumentsChain, BaseModel):
         Combine by mapping first chain over all documents, then reducing the results.
         This reducing can be done recursively if needed (if there are many documents).
         """
+        intermediate_sources = [d.metadata['source'] for d in docs]
         results = self.llm_chain.apply(
             # FYI - this is parallelized and so it is fast.
             [{**{self.document_variable_name: d.page_content}, **kwargs} for d in docs]
@@ -163,7 +164,7 @@ class MapReduceDocumentsChain(BaseCombineDocumentsChain, BaseModel):
             )
         if True or self.return_intermediate_steps:
             _results = [r[self.llm_chain.output_key] for r in results]
-            extra_return_dict = {"intermediate_steps": _results}
+            extra_return_dict = {"intermediate_steps": _results, "intermediate_sources": intermediate_sources}
         else:
             extra_return_dict = {}
         output, _ = self.combine_document_chain.combine_docs(result_docs, **kwargs)
