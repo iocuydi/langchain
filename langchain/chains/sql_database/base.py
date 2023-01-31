@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, Extra, Field
 
 from langchain.chains.base import Chain
 from langchain.chains.llm import LLMChain
@@ -26,7 +26,7 @@ class SQLDatabaseChain(Chain, BaseModel):
 
     llm: BaseLLM
     """LLM wrapper to use."""
-    database: SQLDatabase
+    database: SQLDatabase = Field(exclude=True)
     """SQL Database to connect to."""
     prompt: BasePromptTemplate = PROMPT
     """Prompt to use to translate natural language to SQL."""
@@ -34,6 +34,7 @@ class SQLDatabaseChain(Chain, BaseModel):
     """Number of results to return from the query"""
     input_key: str = "query"  #: :meta private:
     output_key: str = "result"  #: :meta private:
+    return_intermediate_steps: bool = False
 
     class Config:
         """Configuration for this pydantic object."""
@@ -55,13 +56,15 @@ class SQLDatabaseChain(Chain, BaseModel):
 
         :meta private:
         """
-        return [self.output_key]
+        if not self.return_intermediate_steps:
+            return [self.output_key]
+        else:
+            return [self.output_key, "intermediate_steps"]
 
-    def _call(self, inputs: Dict[str, Any]) -> Dict[str, str]:
+    def _call(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         llm_chain = LLMChain(llm=self.llm, prompt=self.prompt)
         input_text = f"{inputs[self.input_key]} \nSQLQuery:"
-        if self.verbose:
-            self.callback_manager.on_text(input_text)
+        self.callback_manager.on_text(input_text, verbose=self.verbose)
         # If not present, then defaults to None which is all tables.
         table_names_to_use = inputs.get("table_names_to_use")
         table_info = self.database.get_table_info(table_names=table_names_to_use)
@@ -72,21 +75,27 @@ class SQLDatabaseChain(Chain, BaseModel):
             "table_info": table_info,
             "stop": ["\nSQLResult:"],
         }
-
+        intermediate_steps = []
         sql_cmd = llm_chain.predict(**llm_inputs)
-        if self.verbose:
-            self.callback_manager.on_text(sql_cmd, color="green")
+        intermediate_steps.append(sql_cmd)
+        self.callback_manager.on_text(sql_cmd, color="green", verbose=self.verbose)
         result = self.database.run(sql_cmd)
-        if self.verbose:
-            self.callback_manager.on_text("\nSQLResult: ")
-            self.callback_manager.on_text(result, color="yellow")
-            self.callback_manager.on_text("\nAnswer:")
+        intermediate_steps.append(result)
+        self.callback_manager.on_text("\nSQLResult: ", verbose=self.verbose)
+        self.callback_manager.on_text(result, color="yellow", verbose=self.verbose)
+        self.callback_manager.on_text("\nAnswer:", verbose=self.verbose)
         input_text += f"{sql_cmd}\nSQLResult: {result}\nAnswer:"
         llm_inputs["input"] = input_text
         final_result = llm_chain.predict(**llm_inputs)
-        if self.verbose:
-            self.callback_manager.on_text(final_result, color="green")
-        return {self.output_key: final_result}
+        self.callback_manager.on_text(final_result, color="green", verbose=self.verbose)
+        chain_result: Dict[str, Any] = {self.output_key: final_result}
+        if self.return_intermediate_steps:
+            chain_result["intermediate_steps"] = intermediate_steps
+        return chain_result
+
+    @property
+    def _chain_type(self) -> str:
+        return "sql_database_chain"
 
 
 class SQLDatabaseSequentialChain(Chain, BaseModel):
@@ -146,11 +155,18 @@ class SQLDatabaseSequentialChain(Chain, BaseModel):
             "table_names": table_names,
         }
         table_names_to_use = self.decider_chain.predict_and_parse(**llm_inputs)
-        if self.verbose:
-            self.callback_manager.on_text("Table names to use:", end="\n")
-            self.callback_manager.on_text(str(table_names_to_use), color="yellow")
+        self.callback_manager.on_text(
+            "Table names to use:", end="\n", verbose=self.verbose
+        )
+        self.callback_manager.on_text(
+            str(table_names_to_use), color="yellow", verbose=self.verbose
+        )
         new_inputs = {
             self.sql_chain.input_key: inputs[self.input_key],
             "table_names_to_use": table_names_to_use,
         }
         return self.sql_chain(new_inputs, return_only_outputs=True)
+
+    @property
+    def _chain_type(self) -> str:
+        return "sql_database_sequential_chain"
