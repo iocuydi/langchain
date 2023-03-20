@@ -85,6 +85,8 @@ class ChatVectorDBChain(Chain, BaseModel):
         question = inputs["question"]
         get_chat_history = self.get_chat_history or _get_chat_history
         chat_history_str = get_chat_history(inputs["chat_history"])
+        if "summary" in inputs and inputs["summary"]:
+            chat_history_str = '{}'.format(inputs["summary"]) + chat_history_str
         vectordbkwargs = inputs.get("vectordbkwargs", {})
         if chat_history_str:
             new_question = self.question_generator.run(
@@ -108,6 +110,8 @@ class ChatVectorDBChain(Chain, BaseModel):
         question = inputs["question"]
         get_chat_history = self.get_chat_history or _get_chat_history
         chat_history_str = get_chat_history(inputs["chat_history"])
+        if "summary" in inputs and inputs["summary"]:
+            chat_history_str = '{}'.format(inputs["summary"]) + chat_history_str
         vectordbkwargs = inputs.get("vectordbkwargs", {})
         if chat_history_str:
             new_question = await self.question_generator.arun(
